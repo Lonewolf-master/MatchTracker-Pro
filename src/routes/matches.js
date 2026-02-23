@@ -17,7 +17,7 @@ matchRouter.get("/", async(req, res)=>{
     console.log(req.query, parsed)
 
     if(!parsed.success){
-        return res.status(400).json({error: 'Invalid Query'})
+        return res.status(400).json({error: 'Invalid Query', details: parsed.error.issues})
     }
     // Using ?? 50 for the default limit
     const limit = Math.min(parsed.data.limit ?? 50, MAX_LIMIT)
@@ -41,11 +41,12 @@ matchRouter.get("/", async(req, res)=>{
 
 matchRouter.post("/", async (req, res)=>{
     const parsed = createMatchSchema.safeParse(req.body)
-    const { data: {startTime, endTime, homeScore, awayScore} } = parsed
 
     if(!parsed.success){
-        return res.status(400).json({error: 'Invalid payload', details: JSON.stringify(parsed.error)})
+        return res.status(400).json({error: 'Invalid payload', details: parsed.error.issues})
     }
+
+    const { data: {startTime, endTime, homeScore, awayScore} } = parsed;
 
     // console.log(parsed) 
     // console.log(parsed.data)
@@ -63,21 +64,21 @@ matchRouter.post("/", async (req, res)=>{
             status : getMatchStatus(startTime, endTime)
         }).returning();
         console.log(event)
-
         // In standard SQL, an INSERT statement usually only returns the number of rows affected or the ID of the last inserted row.
         // The .returning() method (common in PostgreSQL and SQLite) instructs the database to send back the actual data it just saved. This is extremely useful because:
 
+        //It checks if a function named broadcastMatchCreated actually exists inside the "Global Backpack" (app.locals
+        if(res.app.locals.broadcastingMatchCreated) {
+            console.log('broadcasting to client.....')
+            res.app.locals.broadcastingMatchCreated(event)
+        }
 
         res.status(201).json( {data: event})
 
     }catch(e){
         // This will print the raw Postgres error in your terminal
-        console.error("RAW DATABASE ERROR:", e.originalError || e); 
-        console.error("Drizzle Error Name:", e.name);
-        console.error("Drizzle Error Message:", e.message);
-        if (e.originalError) console.error("Original DB Error:", e.originalError.message);
-    
-        res.status(500).json({error: 'Failed to create match.', details: JSON.stringify(e)});
+        console.error("RAW DATABASE ERROR:", e); 
+        res.status(500).json({error: 'Failed to create match.'});
     }
 })
 
