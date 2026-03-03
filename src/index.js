@@ -3,7 +3,7 @@ import { configDotenv } from "dotenv";
 import { createServer } from 'http'; // Built-in Node module
 import { attchedWebSocketServer } from './ws/server.js'
 import matchRouter from './routes/matches.js'
-
+import { arcjetProtection } from "./middleware/arcjet.middleware.js"
 
 configDotenv(); // Load environment variables from .env
 const app = express()
@@ -13,6 +13,8 @@ const HOST = process.env.HOST || '0.0.0.0' ;
 
 // 1. Create the HTTP Server manually using the Express app
 const server = createServer(app);
+
+app.use(arcjetProtection)
 app.use(express.json())
 
 app.get('/', (req, res) => {     
