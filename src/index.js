@@ -4,6 +4,8 @@ import { createServer } from 'http'; // Built-in Node module
 import { attchedWebSocketServer } from './ws/server.js'
 import matchRouter from './routes/matches.js'
 import { arcjetProtection } from "./middleware/arcjet.middleware.js"
+import { commentaryRouter } from './routes/commentary.js';
+
 
 configDotenv(); // Load environment variables from .env
 const app = express()
@@ -16,22 +18,24 @@ const server = createServer(app);
 
 app.use(arcjetProtection)
 app.use(express.json())
-
+ 
 app.get('/', (req, res) => {     
 console.log('Hello from Express server!')
 })
 
-const { broadcastingMatchCreated } = attchedWebSocketServer(server)
+const { broadcastingMatchCreated, broadcastCommentary } = attchedWebSocketServer(server)
 
 // accessible globally across your entire application without needing to import it in every file
 // app.locals: This is an object provided by Express.js that persists throughout the life of the application.
 // The Benefit: Any Route Handler or Middleware can now access that specific function using req.app.locals.broadcastingMatchCreated. or res.app.locals.broadcastingMatchCreated.
-app.locals.broadcastingMatchCreated = broadcastingMatchCreated
+app.locals.broadcastingMatchCreated = broadcastingMatchCreated;
+app.locals.broadcastingMatchCreated = broadcastCommentary;
 
 app.use('/matches', matchRouter)
+app.use('/matches/:id/commentary', commentaryRouter)
 
 server.listen(PORT,HOST,()=>{
-
+ 
     const baseUrl = HOST === '0.0.0.0' ? `http://localhost:${PORT}` : `ws://${HOST}:${PORT}`;
     console.log(`Server is running on ${baseUrl}...`);
     console.log(`WebSocket Server is running on ${baseUrl.replace('http','ws')}/ws...`)

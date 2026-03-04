@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { createMatchSchema, listMatchesQuerySchema } from "../validation/zod.js";
+import { createMatchSchema, listMatchesQuerySchema } from "../validation/matches.js";
 import { db } from '../db/connection.js'
 import { desc } from 'drizzle-orm'; // <--- Ensure this is imported!
 import { matches } from "../db/schema.js";
 import { getMatchStatus } from "../utils/match-status.js";
 
 const matchRouter = Router()
-const MAX_LIMIT = 100;  
+export const MAX_LIMIT = 100;  
 
 
 matchRouter.get("/", async(req, res)=>{

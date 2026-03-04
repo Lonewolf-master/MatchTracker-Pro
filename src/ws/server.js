@@ -1,5 +1,43 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { wsArcjet } from "../utils/arcjet-security.js";
+
+const matchSubscribers = new Map();
+
+
+function subscribe(matchId, socket){
+    if(!matchSubscribers.has(matchId)){
+        matchSubscribers.set(matchId, new Set())
+    }
+    matchSubscribers.get(matchId).add(socket);
+}
+
+function unsubscribe(matchId, socket){
+    const subscribers = matchSubscribers.get(matchId);
+    if(!subscribers) return;
+    subscribers.delete(socket);
+    if(subscribers.size === 0){
+        matchSubscribers.delete(matchId)
+    }
+}
+
+function cleanupSubscriptions(socket){
+    for(const matchId of socket.subscriptions){
+        unsubscribe(matchId, socket)
+    }
+}
+
+function broadcastToMatch(matchId, payload){
+    const subscribers = matchSubscribers.get(matchId);
+    if(!subscribers || subscribers.size === 0)return;
+    const message = JSON.stringify(payload);
+
+    for(const client of subscribers){
+        if(client.readyState === WebSocket.OPEN){
+            client.send(message)
+        }
+    }
+}
+
 function sendJson(socket, payload){
 
     if(socket.readyState !== WebSocket.OPEN) return
@@ -7,13 +45,36 @@ function sendJson(socket, payload){
     socket.send(JSON.stringify(payload));
 }
 
-function broadcast(wss, payload){
+function broadcastToAll(wss, payload){
 
     wss.clients.forEach( client => {
         if(client.readyState === WebSocket.OPEN){
             client.send(JSON.stringify(payload))
         }
     })
+}
+
+function handleMessage(socket, data){
+    let message
+    try {
+        message = JSON.parse(data.toString());
+    } catch (error) {
+        sendJson(socket, {type: 'error', message: "Invalid JSON"})
+    }
+
+    if(message?.type === "subscribe" && Number.isInteger(message.matchId)){
+        subscribe(message.matchId, socket);
+        socket.subscriptions.add(message.matchId);
+        sendJson(socket, {type: 'subscribed', matchId: message.matchId})
+
+    }
+
+    if(message?.type === "unsubscribe" && Number.isInteger(message.matchId)){
+        unsubscribe(message.matchId, socket);
+        socket.subscriptions.delete(message.matchId);
+        sendJson(socket, {type: 'unsubscribed', matchId: message.matchId})
+
+    }
 }
 
 export const attchedWebSocketServer = (server)=>{
@@ -58,8 +119,21 @@ export const attchedWebSocketServer = (server)=>{
         socket.isAlive = true // 1. Start fresh and healthy
 
         socket.on('pong', ()=> { socket.isAlive = true })  // 2. If client responds, they are alive!
+        //attatching a new set allowing the socket to remember what it subscribed to
+        socket.subscriptions = new Set();
 
         sendJson(socket, {type: 'connected'})
+
+        socket.on('message', (data)=>{
+            handleMessage(socket, data);
+        })
+
+        socket.on('error', ()=>{
+            socket.terminate();
+        })
+        socket.on('close', ()=>{
+            cleanupSubscriptions(socket)
+        })
 
         socket.on('error', console.error)
     })
@@ -83,10 +157,13 @@ export const attchedWebSocketServer = (server)=>{
     //this function is actually called on the router folder
     function broadcastingMatchCreated(match){
 
-        broadcast(wss, {type: 'match_created', data: match})
+        broadcastToAll(wss, {type: 'match_created', data: match})
 
+    }
+    function broadcastCommentary(matchId, comment){
+        broadcastToMatch(matchId, {type:'commentary', data: comment})
     }
 
     //returning the function to be used in other files
-    return { broadcastingMatchCreated }
+    return { broadcastingMatchCreated , broadcastCommentary}
 }
